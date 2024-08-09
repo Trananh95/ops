@@ -72,7 +72,6 @@ build:
     DOCKER_TLS_CERTDIR: "/certs"
 
   before_script:
-    - echo $ACCESS_TOKEN
     - export IMAGE_TAG=$(cat api_version.txt)
     - echo "$ACCESS_TOKEN" | docker login registry.gitlab.com -u $USER_NAME --password-stdin
   script:

@@ -15,160 +15,113 @@ Các bước triển khai cicd trên gitlab:
 * Tạo Github Repository
 * Setup Github registry
 * Setup Github runner(nếu có)
-* Setup Github action 
+* Cấu hình Github action 
 
 
 ### Setup github registry
-Gitlab cho chúng ta free private registry cho mỗi repository và unlimited storage để lưu trữ docker images. Tức là với mỗi repo bạn có thể lưu bao nhiêu image tương ứng tuỳ thích.
+Khác với gitlab, thì github private repository sẽ tính phí data transfer theo mỗi action 
 
 <img loading="lazy" width="800px" src="./images/github_registry_price.jpg" alt="Pricing" />
-* Đầu tiên, muốn login vào gitlab registry bằng commandline, chúng ta cần tạo asscess token có đầy đủ quyền truy cập vaò registry:
-    * Huớng dẫn tạo acctesss token có thể đọc tại [đây](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html)
-    * Câu lệnh login vào gitlab registry:
-        ` docker login registry.gitlab.com -u $USER_NAME -p $PASSWORD`
+
+* Đầu tiên, muốn login vào github container registry bằng commandline, chúng ta cần tạo asscess token có đầy đủ quyền truy cập vaò registry:
+    * Câu lệnh login vào github registry:
+        `docker login ghcr.io -u <your-github-username> -p <your-personal-access-token>`
         Ở đây password chính là access token mà chúng ta mới tạo ở trên
-* Sau đó, chúng ta truy cập vào phần registry của repository để xem tên của image được lưu trên registry:
-<img loading="lazy" width="800px" src="./images/container_registry.png" alt="Gitlab Registry" />
+* Sau đó, chúng ta truy cập vào phần registry của repository để xem tên của image được lưu trên registry
 
-### Setup Gitlab-CI:
-Các bạn tạo cho mình 1 file tên là .gitlab-ci.yml. Đây là 1 file đặc biệt 😄, khi commit code lên GItlab, Gitlab sẽ phát hiện nếu có file này thì quá trình CICD sẽ được kích hoạt sau khi code được commit.
+### Setup Github Actions:
+Để thiết lập một quy trình CI/CD bằng GitHub Actions, bạn sẽ cần tạo một tệp workflow trong repository của bạn. GitHub Actions cho phép bạn tự động hóa quy trình phát triển phần mềm của mình, bao gồm kiểm thử, xây dựng, triển khai, v.v. Dưới đây là một ví dụ cơ bản về cách thiết lập một quy trình CI/CD với GitHub Actions.
 
-Chúng ta thêm vào nội dung file này như sau:
+1. Tạo tệp Workflow
+Tạo một thư mục .github/workflows trong repository của bạn nếu chưa có, và tạo một tệp workflow mới, ví dụ ci-cd.yml.
+
+2. Cấu hình tệp Workflow
+Dưới đây là một ví dụ về tệp workflow để kiểm thử, build, và triển khai ứng dụng của bạn:
 ```
-    # This file is a template, and might need editing before it works on your project.
-# To contribute improvements to CI/CD templates, please follow the Development guide at:
-# https://docs.gitlab.com/ee/development/cicd/templates.html
-# This specific template is located at:
-# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
+name: CI/CD Pipeline
 
-# Official language image. Look for the different tagged releases at:
-# https://hub.docker.com/r/library/python/tags/
-image: python:latest
+# Khi nào workflow này sẽ chạy
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
-# Change pip's cache directory to be inside the project directory since we can
-# only cache local items.
-variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+# Các job sẽ được thực hiện
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-# https://pip.pypa.io/en/stable/topics/caching/
-cache:
-  paths:
-    - .cache/pip
+    steps:
+      # Checkout mã nguồn từ repository
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-before_script:
-  - python --version ; pip --version  # For debugging
-  - pip install virtualenv
-  - virtualenv venv
-  - source venv/bin/activate
+      # Cài đặt môi trường (Node.js ví dụ)
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'
 
-build:
-  image: docker:20.10.16
-  services:
-    - docker:20.10.16-dind
-  variables:
-    IMAGE_NAME: registry.gitlab.com/anhtrankstn/ai-stoke
-    DOCKER_TLS_CERTDIR: "/certs"
+      # Cài đặt các dependencies
+      - name: Install dependencies
+        run: npm install
 
-  before_script:
-    - echo $ACCESS_TOKEN
-    - export IMAGE_TAG=$(cat api_version.txt)
-    - echo "$ACCESS_TOKEN" | docker login registry.gitlab.com -u $USER_NAME --password-stdin
-  script:
-    - docker build -t $IMAGE_NAME:$IMAGE_TAG -f Dockerfile.flaskApp .
-    - docker push $IMAGE_NAME:$IMAGE_TAG
-deploy:
-  stage: deploy
-  script:
-    - apt-get update && apt-get install rsync -y && apt-get install openssh-server -y
-    - mkdir -p ~/.ssh
-    - ssh-keyscan -H "$PRODUCT_SERVER_IP" >> ~/.ssh/known_hosts
-    - chmod 644 ~/.ssh/known_hosts
-    - echo "$PRODUCT_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-    - chmod 700 ~/.ssh/id_rsa
-    - echo "$PRODUCT_SSH_KEY" > ~/.ssh/id_rsa.publ
-    - chmod 700 ~/.ssh/id_rsa.pub
-    - ssh linuxuser@$PRODUCT_SERVER_IP 'cd /home/linuxuser/stoke && ./gitlab_login.sh && cd /home/linuxuser/stoke/ai-stoke && docker compose up -d'
-  environment: production
+      # Chạy kiểm thử
+      - name: Run tests
+        run: npm test
 
-```
-Trước khi tìm hiểu về nội dung file này mình sẽ giải thích điều gì sẽ xảy ra ở quá trình CICD nhé:
+      # Build dự án
+      - name: Build project
+        run: npm run build
 
-* Khi các bạn commit code và có chứa file .gitlab-ci.yml thì quá trình CICD sẽ được khởi động
-* Gitlab sẽ tạo ra 1 pipeline, pipeline chính là toàn bộ những gì trong file .gitlab-ci.yml của chúng ta,  pipeline này sẽ chứa nhiều jobs, các jobs này sẽ được gửi tới các Gitlab Runners, mỗi 1 con runner ở đây có thể hiểu là 1 worker, chúng sẽ tạo ra 1 môi trường riêng để chạy job của chúng ta và khi kết thúc thì trả kết quả lại về cho Gitlab.
-* Mặc định Gitlab họ có nhiều Share Runners dùng chung cho tất cả mọi người, cá nhân mình thấy project vừa và nhỏ thì vẫn đủ để chạy CICD, job của chúng ta không phải pending (chờ) nhiều, nhưng nếu các bạn có nhu cầu chạy nhiều CICD pipeline thì các bạn có thể cài Gitlab runner về server riêng của các bạn và không phải share với ai cả
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      # Checkout mã nguồn từ repository
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-Các thành phần cơ bản sẽ bao gồm như sau:
+      # Thiết lập các secrets cần thiết (ví dụ SSH để deploy)
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-* Danh sách các bước (stage) sẽ thực hiện
-* Các công việc (job) cần được thực hiện của stage đi kèm với danh sách câu lệnh
-* Các biến môi trường cần sử dụng cho toàn bộ các công việc hoặc từng job (nếu có)
-* Các tập tin cần thiết từ các repository khác cần được thêm (nếu có)
-* Docker image cần sử dụng cho các job (nếu có)
-* Danh sách các câu lệnh cần được thực thi trước và sau khi thực thi job (nếu có)
-* Tag dùng để chỉ định runner nào được chọn để thực thi job (nếu có)
-
-<img loading="lazy" width="800px" src="./images/gitlab_cicd_params.png" alt="Gitlab Registry" />
-
-### Stages: các bước cần thực hiện
-Từ khóa này đực sử dụng để khai báo và thứ tự các bước (stage) mà pipeline của người dùng sẽ có. Nếu như không được khai báo trong file gitlab-ci.yaml, pipeline của người dùng sẽ bao gồm các stage mặc định của Gitlab:
-– .pre
-– build
-– test
-– deploy
-– .post
- 
-
-Người dùng có thể tự khai báo các stage với cách đặt tên và thứ tự các stage theo nhu cầu của mình, không yêu cầu phải giống như cấu hình mặc định của Gitlab. Ví dụ:
-```
-stages:
- - linter
- - unit-test
- - build-image
- - deploy-service
-
-```
-Một stage sẽ có thể bao gồm nhiều job khác nhau, nhưng 1 job thì chỉ thuộc 1 stage. Những job nào không khai báo “stage” thì sẽ mặc định được cấu hình thuộc stage “test”. Các job thuộc cùng 1 stage sẽ được xử lý đồng thời (parallel) tùy theo số lượng runner hiện có của repo.
-Các stage sẽ được thực thi 1 cách tuần tự, từ trên xuống dưới. Khi stage đầu tiên thực thi “thành công” các job của mình thì stage tiếp theo sẽ bắt đầu xử lý các job cả mình. Quá trình này sẽ do người dùng quy định dựa vào cách liệt kê và sắp xếp các stage. 
- ### Job: các công việc cần thực hiện của từng stage
- Các job sẽ được người dùng khai báo bằng cách đặt tên không trùng với các từ khóa mặc định của Gitlab-CI (default, stages, variables,…). Nội dung của 1 job sẽ cơ bản bao gồm:
-– stage: tên của stage mà job thuộc về. Nếu không khai báo thì mặc định job sẽ thuộc về stage “test”
-– script: danh sách các câu lệnh mà job sẽ thực hiện
-– image: Docker image được sử dụng cho job (chỉ áp dụng đối với executor là Docker)
-– variables: danh sách các biến môi trường của job (tùy chọn – không bắt buộc)
-– tags: danh sách các tag dùng để chỉ định runner nào sẽ thực thi job
-
-Ví dụ:
-```
-unit-test-job:        # Job có tên là unit-test-job
-  stage: test         # Thuộc stage "test"
-  image: python:3.6   # Docker image sử dụng để thực thi job (chỉ áp dụng đối với executor là Docker)
-  tags:               # Những runner được đánh tag thuộc danh sách đã liệt kê sẽ thực thi job
-    - testing
-    - python
-  script:             # Danh sách câu lệnh mà job này sẽ thực hiện
-    - command test 1
-    - command test n
-
+      # Triển khai dự án (ví dụ đẩy mã lên một server qua SSH)
+      - name: Deploy to Server
+        run: |
+          ssh user@your-server "cd /path/to/your/app && git pull && npm install && npm run start"
 ```
 
-#### script: các câu lệnh job sẽ thực thi
-Từ khóa này được khai báo bên trong từng job và sử dụng để liệt kê danh sách các câu lệnh cần được thực thi của các job. Mỗi job sẽ cần được khai báo cách “script” để executor có thể thực hiện.
+3. Giải thích tệp Workflow
+* on:: Định nghĩa các sự kiện sẽ kích hoạt workflow này. Ví dụ: workflow sẽ chạy khi có push hoặc pull request đến nhánh main.
 
-#### stage: khai báo job thuộc stage được chỉ định (tùy chọn)
-Từ khóa này được sử dụng bên trong các job để khai báo job sẽ thuộc một stage trong danh sách đã khai báo trước đó. Nếu như danh sách stage khác với cấu hình mặc định của Gitlab, bạn cần thêm trường này để xác định rõ job sẽ thuộc stage nào trong pipeline. Nếu không được định nghĩa, job sẽ mặc định thuộc stage “test”.
+* jobs:: Xác định các công việc (jobs) sẽ được thực hiện. Trong ví dụ này, có hai jobs: build và deploy.
 
-#### image: chỉ áp dụng khi executor là docker (tùy chọn)
-Từ khóa này được sử dụng để khai báo Docker image mặc định sử dụng cho toàn bộ các job hoặc chỉ sử dụng cho 1 job cụ thể nếu “executor” của runner là docker.
+* build job:
 
-#### tags: dùng để chọn runner xử lý job (tùy chọn)
-Khi sử dụng từ khóa này, người dùng có thể chỉ định được runner nào sẽ nhận và xử lý job bằng các liệt ê các tag tương ứng. Mặc định chỉ những runner được đánh tag cùng tên với danh sách đã liệt kê sẽ có quyền xử lý job, những runner còn lại nếu chưa được đánh tag sẽ “hầu như” không được nhận job. Cách đặt tên tag là do người dùng quyết định.
+    * runs-on:: Chỉ định môi trường để chạy job (ở đây là ubuntu-latest).
+    * Các bước (steps):
+        * Checkout mã nguồn từ repository.
+        * Cài đặt môi trường Node.js.
+        * Cài đặt các dependencies từ package.json.
+        * Chạy kiểm thử (nếu có).
+        * Build dự án.
+* deploy job:
 
-#### variables: biến môi trường (tùy chọn)
-Từ khóa này được sử dụng để khai báo các biến môi trường được sử dụng toàn bộ các job hoặc cho từng job cụ thể nếu được khai báo bên trong các job. 
+    * Job này chạy sau khi job build hoàn thành thành công (needs: build).
+    * Thiết lập SSH để kết nối với server triển khai.
+    * Triển khai dự án bằng cách kéo mã mới về từ repository và khởi động lại ứng dụng.
+4. Thiết lập Secrets
+Để bảo mật, bạn nên lưu các thông tin nhạy cảm như SSH keys, token, hoặc thông tin đăng nhập vào GitHub Secrets. Bạn có thể thiết lập chúng từ repository của mình:
 
-#### before_script: các câu lệnh job sẽ thực thi (tùy chọn)
-Từ khóa này được sử dụng để liệt kê danh sách các câu lệnh cần được thực thi trước khi vào các câu lệnh chính của job được thực hiện. Bạn có thể sử dụng từ khóa này để áp dụng cho toàn bộ các job nếu khai báo bên từ khóa này không thuộc bất kỳ job nào cả.
-
-
-#### after_script: các câu lệnh job sẽ thực thi (tùy chọn)
-Từ khóa này được sử dụng để liệt kê danh sách câu lệnh cần được thực thi sau khi “script” bên trên đã thực thi xong. Bạn có thể sử dụng từ khóa này để tiến hành các câu lệnh mang tính chất “dọn dẹp” sau khi đã thực thi xong công việc để giải phóng tài nguyên của hệ thống được sinh ra trong quá trình thực thi “script”.
+* Vào repository của bạn trên GitHub.
+* Chọn Settings.
+* Chọn Secrets and variables > Actions.
+* Nhấn vào New repository secret để thêm secrets.
+5. Kiểm tra và sử dụng CI/CD Pipeline
+Sau khi bạn đã đẩy tệp workflow lên repository, GitHub Actions sẽ tự động chạy pipeline mỗi khi có push hoặc pull request đến nhánh main. Bạn có thể xem tiến trình của pipeline trong tab "Actions" trên GitHub.
