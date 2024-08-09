@@ -7,7 +7,7 @@
 
 ## Pricing
 
-<img loading="lazy" width="800px" src="./images/github_price.jpeg" alt="Pricing" />
+<img loading="lazy" width="800px" src="./image/github_price.jpeg" alt="Pricing" />
 
 
 ## Triển khai CICD trên github action
@@ -21,7 +21,7 @@ Các bước triển khai cicd trên gitlab:
 ### Setup github registry
 Khác với gitlab, thì github private repository sẽ tính phí data transfer theo mỗi action 
 
-<img loading="lazy" width="800px" src="./images/github_registry_price.jpg" alt="Pricing" />
+<img loading="lazy" width="800px" src="./image/github_registry_price.jpg" alt="Pricing" />
 
 * Đầu tiên, muốn login vào github container registry bằng commandline, chúng ta cần tạo asscess token có đầy đủ quyền truy cập vaò registry:
     * Câu lệnh login vào github registry:
